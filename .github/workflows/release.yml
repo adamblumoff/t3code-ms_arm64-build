@@ -105,11 +105,6 @@ jobs:
             platform: win
             target: nsis
             arch: x64
-          - label: Windows arm64
-            runner: windows-11-arm
-            platform: win
-            target: nsis
-            arch: arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -126,6 +121,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version-file: package.json
+
+      - name: Setup Python
+        if: ${{ matrix.platform == 'win' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -218,12 +219,6 @@ jobs:
             fi
           fi
 
-          if [[ "${{ matrix.platform }}" == "win" && "${{ matrix.arch }}" == "arm64" ]]; then
-            if [[ -f release-publish/latest.yml ]]; then
-              mv release-publish/latest.yml release-publish/latest-arm64.yml
-            fi
-          fi
-
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -231,9 +226,140 @@ jobs:
           path: release-publish/*
           if-no-files-found: error
 
+  build_windows_arm64:
+    name: Build Windows arm64 (self-hosted)
+    if: ${{ github.repository == 'pingdotgg/t3code' }}
+    needs: preflight
+    runs-on: [self-hosted, Windows, ARM64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.preflight.outputs.ref }}
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          architecture: arm64
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Ensure Windows arm64 native build toolchain
+        shell: pwsh
+        run: ./scripts/ensure-windows-arm64-build-tools.ps1 -InstallMissing
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Build Windows arm64 desktop artifact
+        shell: pwsh
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
+          AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME }}
+          AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
+        run: |
+          $args = @(
+            "--platform", "win",
+            "--target", "nsis",
+            "--arch", "arm64",
+            "--build-version", "${{ needs.preflight.outputs.version }}",
+            "--verbose"
+          )
+
+          function Has-All {
+            param([string[]]$Values)
+            foreach ($value in $Values) {
+              if ([string]::IsNullOrWhiteSpace($value)) {
+                return $false
+              }
+            }
+            return $true
+          }
+
+          if (Has-All @(
+            $env:AZURE_TENANT_ID,
+            $env:AZURE_CLIENT_ID,
+            $env:AZURE_CLIENT_SECRET,
+            $env:AZURE_TRUSTED_SIGNING_ENDPOINT,
+            $env:AZURE_TRUSTED_SIGNING_ACCOUNT_NAME,
+            $env:AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME,
+            $env:AZURE_TRUSTED_SIGNING_PUBLISHER_NAME
+          )) {
+            Write-Host "Windows signing enabled (Azure Trusted Signing)."
+            $args += "--signed"
+          } else {
+            Write-Host "Windows signing disabled (missing one or more Azure Trusted Signing secrets)."
+          }
+
+          bun run dist:desktop:artifact -- @args
+
+      - name: Verify Windows arm64 release outputs
+        shell: pwsh
+        run: |
+          $arm64Installers = @(Get-ChildItem -Path "release" -Filter "*-arm64.exe" -File -ErrorAction SilentlyContinue)
+          if ($arm64Installers.Count -eq 0) {
+            Write-Host "Missing Windows arm64 installer in release/"
+            Get-ChildItem -Path "release" -File -Recurse | Sort-Object FullName | Select-Object -ExpandProperty FullName
+            exit 1
+          }
+
+          $blockmaps = @(Get-ChildItem -Path "release" -Filter "*.blockmap" -File -ErrorAction SilentlyContinue)
+          if ($blockmaps.Count -eq 0) {
+            Write-Host "Missing Windows blockmap output in release/"
+            Get-ChildItem -Path "release" -File -Recurse | Sort-Object FullName | Select-Object -ExpandProperty FullName
+            exit 1
+          }
+
+          if (!(Test-Path "release/latest.yml")) {
+            Write-Host "Missing Windows updater manifest in release/latest.yml"
+            Get-ChildItem -Path "release" -File -Recurse | Sort-Object FullName | Select-Object -ExpandProperty FullName
+            exit 1
+          }
+
+      - name: Collect release assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "release-publish" -Force | Out-Null
+
+          Get-ChildItem -Path "release\\*" -Include "*.exe", "*.blockmap", "latest*.yml" -File |
+            ForEach-Object {
+              Copy-Item $_.FullName -Destination "release-publish"
+            }
+
+          if (Test-Path "release-publish/latest.yml") {
+            Move-Item "release-publish/latest.yml" "release-publish/latest-arm64.yml" -Force
+          }
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-win-arm64
+          path: release-publish/*
+          if-no-files-found: error
+
   publish_cli:
     name: Publish CLI to npm
-    needs: [preflight, build]
+    if: ${{ github.repository == 'pingdotgg/t3code' }}
+    needs: [preflight, build, build_windows_arm64]
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -263,7 +389,15 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: [preflight, build, publish_cli]
+    needs: [preflight, build, build_windows_arm64, publish_cli]
+    if: >-
+      ${{
+        always() &&
+        needs.preflight.result == 'success' &&
+        needs.build.result == 'success' &&
+        (needs.build_windows_arm64.result == 'success' || needs.build_windows_arm64.result == 'skipped') &&
+        (needs.publish_cli.result == 'success' || needs.publish_cli.result == 'skipped')
+      }}
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -291,6 +425,7 @@ jobs:
           rm -f release-assets/latest-mac-x64.yml
 
       - name: Merge Windows updater manifests
+        if: ${{ hashFiles('release-assets/latest-arm64.yml') != '' }}
         run: |
           node scripts/merge-win-update-manifests.ts \
             release-assets/latest.yml \
@@ -318,6 +453,7 @@ jobs:
   finalize:
     name: Finalize release
     needs: [preflight, release]
+    if: ${{ github.repository == 'pingdotgg/t3code' }}
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout

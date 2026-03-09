@@ -6,11 +6,12 @@ This document covers how to run desktop releases from one tag, first without sig
 
 - Trigger: push tag matching `v*.*.*`.
 - Runs quality gates first: lint, typecheck, test.
-- Builds four artifacts in parallel:
+- Builds five artifacts per release:
   - macOS `arm64` DMG
   - macOS `x64` DMG
   - Linux `x64` AppImage
   - Windows `x64` NSIS installer
+  - Windows `arm64` NSIS installer built on a self-hosted Windows ARM64 runner
 - Publishes one GitHub Release with all produced files.
   - Versions with a suffix after `X.Y.Z` (for example `1.2.3-alpha.1`) are published as GitHub prereleases.
   - Only plain `X.Y.Z` releases are marked as the repository's latest release.
@@ -39,7 +40,11 @@ This document covers how to run desktop releases from one tag, first without sig
 - macOS metadata note:
   - `electron-updater` reads `latest-mac.yml` for both Intel and Apple Silicon.
   - The workflow merges the per-arch mac manifests into one `latest-mac.yml` before publishing the GitHub Release.
-
+- Windows ARM64 metadata note:
+  - the workflow builds Windows `x64` and Windows `arm64` installers separately.
+  - the release job merges `latest.yml` and `latest-arm64.yml` into one Windows updater manifest before publishing.
+  - the official Windows `arm64` release build runs on a self-hosted `Windows + ARM64` runner, not the hosted `windows-11-arm` image.
+  - on Windows ARM64, packaging still rebuilds `node-pty`, so the release runner needs native ARM64 Node/Bun plus the ARM64 and x64/x86 MSVC Spectre-mitigated libraries available.
 ## 0) npm OIDC trusted publishing setup (CLI)
 
 The workflow publishes the CLI with `bun publish` from `apps/server` after bumping
@@ -127,6 +132,15 @@ Checklist:
 6. Add Azure secrets listed above in GitHub Actions secrets.
 7. Re-run a tag release and confirm Windows installer is signed.
 
+Windows ARM64 toolchain note:
+
+- The Windows ARM64 build leg runs on a self-hosted runner with labels `[self-hosted, Windows, ARM64]`.
+- That runner must provide native ARM64 `node` and native ARM64 `bun`.
+- The repo is pinned to Bun `1.3.10+` because native Windows ARM64 Bun support starts there.
+- The workflow still provisions the Visual Studio 2022 Desktop C++ workload plus Windows ARM64 packaging prerequisites before running `electron-builder`.
+- This is required because the packaged app currently rebuilds `node-pty` during the Windows ARM64 release build.
+- The workflow verifies native ARM64 `node`/`bun`, Python availability, ARM64 MSBuild, and the ARM64/x64 Spectre library paths before packaging starts.
+
 ## 4) Ongoing release checklist
 
 1. Ensure `main` is green in CI.
@@ -137,6 +151,7 @@ Checklist:
    - preflight passes
    - all matrix builds pass
    - release job uploads expected files
+   - Windows `arm64` build emits `*-arm64.exe`, `*.blockmap`, and `latest.yml` before artifact collection
 6. Smoke test downloaded artifacts.
 
 ## 5) Troubleshooting
@@ -145,6 +160,9 @@ Checklist:
   - Check all Apple secrets are populated and non-empty.
 - Windows build unsigned when expected signed:
   - Check all Azure ATS and auth secrets are populated and non-empty.
+- Windows ARM64 build fails with `MSB8040` / Spectre library errors:
+  - Confirm the workflow's Windows ARM64 toolchain setup step completed successfully.
+  - Verify the runner has both `MSVC v143 - VS 2022 C++ ARM64/ARM64EC Spectre-mitigated libs (Latest)` and `MSVC v143 - VS 2022 C++ x64/x86 Spectre-mitigated libs (Latest)`.
 - Build fails with signing error:
   - Retry with secrets removed to confirm unsigned path still works.
   - Re-check certificate/profile names and tenant/client credentials.
