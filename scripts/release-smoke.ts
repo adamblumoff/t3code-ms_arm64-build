@@ -105,6 +105,42 @@ releaseDate: '2026-03-08T11:18:07.540Z'
   return { x64Path, arm64Path };
 }
 
+function writeLinuxManifestFixtures(targetRoot: string): { x64Path: string; arm64Path: string } {
+  const assetDirectory = resolve(targetRoot, "release-assets");
+  mkdirSync(assetDirectory, { recursive: true });
+
+  const x64Path = resolve(assetDirectory, "latest-linux.yml");
+  const arm64Path = resolve(assetDirectory, "latest-linux-arm64.yml");
+
+  writeFileSync(
+    x64Path,
+    `version: 9.9.9-smoke.0
+files:
+  - url: T3-Code-9.9.9-smoke.0-x64.AppImage
+    sha512: x64appimage
+    size: 132000112
+path: T3-Code-9.9.9-smoke.0-x64.AppImage
+sha512: x64appimage
+releaseDate: '2026-03-08T11:22:14.587Z'
+`,
+  );
+
+  writeFileSync(
+    arm64Path,
+    `version: 9.9.9-smoke.0
+files:
+  - url: T3-Code-9.9.9-smoke.0-arm64.AppImage
+    sha512: arm64appimage
+    size: 126711872
+path: T3-Code-9.9.9-smoke.0-arm64.AppImage
+sha512: arm64appimage
+releaseDate: '2026-03-08T11:28:07.540Z'
+`,
+  );
+
+  return { x64Path, arm64Path };
+}
+
 function assertContains(haystack: string, needle: string, message: string): void {
   if (!haystack.includes(needle)) {
     throw new Error(message);
@@ -163,6 +199,28 @@ try {
     mergedWindowsManifest,
     "T3-Code-9.9.9-smoke.0-arm64.exe",
     "Merged Windows manifest is missing the arm64 asset.",
+  );
+
+  const { x64Path: linuxX64Path, arm64Path: linuxArm64Path } = writeLinuxManifestFixtures(tempRoot);
+  execFileSync(
+    process.execPath,
+    [resolve(repoRoot, "scripts/merge-linux-update-manifests.ts"), linuxX64Path, linuxArm64Path],
+    {
+      cwd: repoRoot,
+      stdio: "inherit",
+    },
+  );
+
+  const mergedLinuxManifest = readFileSync(linuxX64Path, "utf8");
+  assertContains(
+    mergedLinuxManifest,
+    "T3-Code-9.9.9-smoke.0-x64.AppImage",
+    "Merged Linux manifest is missing the x64 asset.",
+  );
+  assertContains(
+    mergedLinuxManifest,
+    "T3-Code-9.9.9-smoke.0-arm64.AppImage",
+    "Merged Linux manifest is missing the arm64 asset.",
   );
 
   console.log("Release smoke checks passed.");

@@ -6,10 +6,11 @@ This document covers how to run desktop releases from one tag, first without sig
 
 - Trigger: push tag matching `v*.*.*`.
 - Runs quality gates first: lint, typecheck, test.
-- Builds five artifacts per release:
+- Builds six artifacts per release:
   - macOS `arm64` DMG
   - macOS `x64` DMG
   - Linux `x64` AppImage
+  - Linux `arm64` AppImage
   - Windows `x64` NSIS installer
   - Windows `arm64` NSIS installer built on a self-hosted Windows ARM64 runner
 - Publishes one GitHub Release with all produced files.
@@ -45,6 +46,11 @@ This document covers how to run desktop releases from one tag, first without sig
   - the release job merges `latest.yml` and `latest-arm64.yml` into one Windows updater manifest before publishing.
   - the official Windows `arm64` release build runs on a self-hosted `Windows + ARM64` runner, not the hosted `windows-11-arm` image.
   - on Windows ARM64, packaging still rebuilds `node-pty`, so the release runner needs native ARM64 Node/Bun plus the ARM64 and x64/x86 MSVC Spectre-mitigated libraries available.
+- Linux ARM64 metadata note:
+  - the workflow builds Linux `x64` and Linux `arm64` AppImages separately.
+  - the release job merges `latest-linux.yml` and `latest-linux-arm64.yml` into one Linux updater manifest before publishing.
+  - Linux updater selection in the desktop app filters the merged AppImage list to the current runtime architecture before download.
+
 ## 0) npm OIDC trusted publishing setup (CLI)
 
 The workflow publishes the CLI with `bun publish` from `apps/server` after bumping
@@ -151,6 +157,7 @@ Windows ARM64 toolchain note:
    - preflight passes
    - all matrix builds pass
    - release job uploads expected files
+   - Linux `arm64` build emits `*-arm64.AppImage` and `latest-linux.yml` before artifact collection
    - Windows `arm64` build emits `*-arm64.exe`, `*.blockmap`, and `latest.yml` before artifact collection
 6. Smoke test downloaded artifacts.
 
@@ -163,6 +170,9 @@ Windows ARM64 toolchain note:
 - Windows ARM64 build fails with `MSB8040` / Spectre library errors:
   - Confirm the workflow's Windows ARM64 toolchain setup step completed successfully.
   - Verify the runner has both `MSVC v143 - VS 2022 C++ ARM64/ARM64EC Spectre-mitigated libs (Latest)` and `MSVC v143 - VS 2022 C++ x64/x86 Spectre-mitigated libs (Latest)`.
+- Linux ARM64 build fails before packaging starts:
+  - Confirm the `ubuntu-24.04-arm` runner is available for the repository.
+  - Verify the Linux ARM64 build leg emits both the AppImage and `latest-linux.yml` in `release/`.
 - Build fails with signing error:
   - Retry with secrets removed to confirm unsigned path still works.
   - Re-check certificate/profile names and tenant/client credentials.

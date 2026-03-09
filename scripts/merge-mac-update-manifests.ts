@@ -6,6 +6,7 @@ interface MacUpdateFile {
   readonly url: string;
   readonly sha512: string;
   readonly size: number;
+  readonly extras: Readonly<Record<string, MacUpdateScalar>>;
 }
 
 type MacUpdateScalar = string | number | boolean;
@@ -21,6 +22,7 @@ interface MutableMacUpdateFile {
   url?: string;
   sha512?: string;
   size?: number;
+  extras?: Record<string, MacUpdateScalar>;
 }
 
 function stripSingleQuotes(value: string): string {
@@ -51,6 +53,7 @@ function parseFileRecord(
     url: currentFile.url,
     sha512: currentFile.sha512,
     size: currentFile.size,
+    extras: currentFile.extras ?? {},
   };
 }
 
@@ -109,6 +112,26 @@ export function parseMacUpdateManifest(raw: string, sourcePath: string): MacUpda
         );
       }
       currentFile.size = Number(fileSizeMatch[1]);
+      continue;
+    }
+
+    const fileExtraMatch = line.match(/^    ([A-Za-z][A-Za-z0-9]*):\s*(.+)$/);
+    if (fileExtraMatch?.[1] && fileExtraMatch[2] !== undefined) {
+      if (currentFile === null) {
+        throw new Error(
+          `Invalid macOS update manifest at ${sourcePath}:${lineNumber}: file metadata without a file entry.`,
+        );
+      }
+      const [, key, rawValue] = fileExtraMatch;
+      if (key === "sha512" || key === "size") {
+        throw new Error(
+          `Invalid macOS update manifest at ${sourcePath}:${lineNumber}: duplicate file field '${key}'.`,
+        );
+      }
+      currentFile.extras = {
+        ...(currentFile.extras ?? {}),
+        [key]: parseScalarValue(rawValue),
+      };
       continue;
     }
 
@@ -214,7 +237,12 @@ export function mergeMacUpdateManifests(
   const filesByUrl = new Map<string, MacUpdateFile>();
   for (const file of [...primary.files, ...secondary.files]) {
     const existing = filesByUrl.get(file.url);
-    if (existing && (existing.sha512 !== file.sha512 || existing.size !== file.size)) {
+    if (
+      existing &&
+      (existing.sha512 !== file.sha512 ||
+        existing.size !== file.size ||
+        JSON.stringify(existing.extras) !== JSON.stringify(file.extras))
+    ) {
       throw new Error(
         `Cannot merge macOS update manifests: conflicting file entry for ${file.url}.`,
       );
@@ -249,6 +277,13 @@ export function serializeMacUpdateManifest(manifest: MacUpdateManifest): string 
     lines.push(`  - url: ${file.url}`);
     lines.push(`    sha512: ${file.sha512}`);
     lines.push(`    size: ${file.size}`);
+    for (const key of Object.keys(file.extras).toSorted()) {
+      const value = file.extras[key];
+      if (value === undefined) {
+        throw new Error(`Cannot serialize macOS update manifest: missing file value for '${key}'.`);
+      }
+      lines.push(`    ${key}: ${serializeScalarValue(value)}`);
+    }
   }
 
   for (const key of Object.keys(manifest.extras).toSorted()) {

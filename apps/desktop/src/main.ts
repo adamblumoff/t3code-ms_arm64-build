@@ -33,6 +33,7 @@ import {
 } from "./updateMachine";
 import { isArm64HostRunningTranslatedX64Build, resolveDesktopRuntimeInfo } from "./runtimeArch";
 import {
+  preferLinuxArchUpdate,
   preferWindowsArm64UpdateForTranslatedBuild,
   type MutableUpdateInfoAndProvider,
 } from "./windowsArm64Update";
@@ -710,6 +711,9 @@ async function checkForUpdates(reason: string): Promise<void> {
 
   try {
     await autoUpdater.checkForUpdates();
+    if (preferLinuxArchUpdate(desktopRuntimeInfo, getMutableUpdaterSelectionState())) {
+      console.info("[desktop-updater] Adjusted Linux update selection to prefer the current app architecture.");
+    }
     if (preferWindowsArm64UpdateForTranslatedBuild(desktopRuntimeInfo, getMutableUpdaterSelectionState())) {
       console.info(
         "[desktop-updater] Adjusted translated Windows ARM64 update selection to prefer arm64 artifacts.",
@@ -731,6 +735,7 @@ async function downloadAvailableUpdate(): Promise<{ accepted: boolean; completed
   updateDownloadInFlight = true;
   setUpdateState(reduceDesktopUpdateStateOnDownloadStart(updateState));
   autoUpdater.disableDifferentialDownload = isArm64HostRunningTranslatedX64Build(desktopRuntimeInfo);
+  preferLinuxArchUpdate(desktopRuntimeInfo, getMutableUpdaterSelectionState());
   preferWindowsArm64UpdateForTranslatedBuild(desktopRuntimeInfo, getMutableUpdaterSelectionState());
   console.info("[desktop-updater] Downloading update...");
 

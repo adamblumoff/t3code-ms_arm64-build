@@ -71,7 +71,8 @@
   const RELEASES_URL = `https://github.com/${REPO}/releases`;
   const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
 
-  type Platform = { os: "mac" | "win" | "linux"; label: string; arch?: string };
+  type PlatformArch = "arm64" | "x64";
+  type Platform = { os: "mac" | "win" | "linux"; label: string; arch?: PlatformArch };
   type NavigatorWithUserAgentData = Navigator & {
     userAgentData?: {
       getHighEntropyValues?: (
@@ -84,7 +85,18 @@
     };
   };
 
-  async function detectWindowsArch(): Promise<string | undefined> {
+  function normalizeArchitecture(architecture: string): PlatformArch | undefined {
+    const normalized = architecture.toLowerCase();
+    if (normalized.includes("arm") || normalized.includes("aarch64")) {
+      return "arm64";
+    }
+    if (normalized.includes("x86") || normalized.includes("x64") || normalized.includes("amd64")) {
+      return "x64";
+    }
+    return undefined;
+  }
+
+  async function detectWindowsArch(): Promise<PlatformArch | undefined> {
     const userAgentData = (navigator as NavigatorWithUserAgentData).userAgentData;
     if (!userAgentData?.getHighEntropyValues) {
       return undefined;
@@ -96,18 +108,27 @@
         "bitness",
         "platform",
       ]);
-      const architecture = entropy.architecture?.toLowerCase() ?? "";
-      if (architecture.includes("arm")) {
-        return "arm64";
-      }
-      if (architecture.includes("x86") || architecture.includes("x64")) {
-        return "x64";
-      }
+      return normalizeArchitecture(entropy.architecture ?? "");
     } catch {
       return undefined;
     }
+  }
 
-    return undefined;
+  async function detectLinuxArch(): Promise<PlatformArch | undefined> {
+    const userAgentData = (navigator as NavigatorWithUserAgentData).userAgentData;
+    if (userAgentData?.getHighEntropyValues) {
+      try {
+        const entropy = await userAgentData.getHighEntropyValues(["architecture"]);
+        const detected = normalizeArchitecture(entropy.architecture ?? "");
+        if (detected) {
+          return detected;
+        }
+      } catch {
+        // Fall back to parsing the user agent below.
+      }
+    }
+
+    return normalizeArchitecture(navigator.userAgent);
   }
 
   async function detectPlatform(): Promise<Platform | null> {
@@ -126,7 +147,13 @@
         arch: "arm64",
       };
     }
-    if (/Linux/i.test(ua)) return { os: "linux", label: "Download for Linux" };
+    if (/Linux/i.test(ua)) {
+      return {
+        os: "linux",
+        label: "Download for Linux",
+        arch: await detectLinuxArch(),
+      };
+    }
     return null;
   }
 
@@ -155,7 +182,13 @@
       return (preferred ?? fallback)?.browser_download_url ?? null;
     }
     if (platform.os === "linux") {
+      const preferred = platform.arch
+        ? assets.find((a) => a.name.endsWith(`-${platform.arch}.AppImage`))
+        : null;
+      const x64Fallback = assets.find((a) => a.name.endsWith("-x64.AppImage"));
       return (
+        preferred?.browser_download_url ??
+        x64Fallback?.browser_download_url ??
         assets.find((a) => a.name.endsWith(".AppImage"))
           ?.browser_download_url ?? null
       );

@@ -24,6 +24,49 @@ function isArm64ArtifactPath(path: string): boolean {
   return path.toLowerCase().includes("arm64");
 }
 
+function hasAppImageExtension(path: string): boolean {
+  return path.toLowerCase().endsWith(".appimage");
+}
+
+function hasArchSpecificAppImagePath(path: string, arch: DesktopRuntimeInfo["appArch"]): boolean {
+  const normalizedPath = path.toLowerCase();
+  return hasAppImageExtension(normalizedPath) && normalizedPath.includes(`-${arch}.`);
+}
+
+export function preferLinuxArchUpdate(
+  runtimeInfo: DesktopRuntimeInfo,
+  updateInfoAndProvider: MutableUpdateInfoAndProvider | null | undefined,
+): boolean {
+  if (runtimeInfo.platform !== "linux" || (runtimeInfo.appArch !== "arm64" && runtimeInfo.appArch !== "x64")) {
+    return false;
+  }
+
+  const info = updateInfoAndProvider?.info;
+  const files = info?.files;
+  if (!info || !files || files.length === 0) {
+    return false;
+  }
+
+  const preferredFiles = files.filter((file) => hasArchSpecificAppImagePath(file.url, runtimeInfo.appArch));
+  if (preferredFiles.length === 0) {
+    return false;
+  }
+
+  info.files = preferredFiles;
+
+  const firstPreferredFile = preferredFiles[0];
+  if (
+    firstPreferredFile &&
+    typeof info.path === "string" &&
+    hasAppImageExtension(info.path) &&
+    !hasArchSpecificAppImagePath(info.path, runtimeInfo.appArch)
+  ) {
+    info.path = firstPreferredFile.url;
+  }
+
+  return true;
+}
+
 export function preferWindowsArm64UpdateForTranslatedBuild(
   runtimeInfo: DesktopRuntimeInfo,
   updateInfoAndProvider: MutableUpdateInfoAndProvider | null | undefined,
