@@ -105,6 +105,11 @@ jobs:
             platform: win
             target: nsis
             arch: x64
+          - label: Windows arm64
+            runner: windows-11-arm
+            platform: win
+            target: nsis
+            arch: arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -213,6 +218,12 @@ jobs:
             fi
           fi
 
+          if [[ "${{ matrix.platform }}" == "win" && "${{ matrix.arch }}" == "arm64" ]]; then
+            if [[ -f release-publish/latest.yml ]]; then
+              mv release-publish/latest.yml release-publish/latest-arm64.yml
+            fi
+          fi
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -278,6 +289,13 @@ jobs:
             release-assets/latest-mac.yml \
             release-assets/latest-mac-x64.yml
           rm -f release-assets/latest-mac-x64.yml
+
+      - name: Merge Windows updater manifests
+        run: |
+          node scripts/merge-win-update-manifests.ts \
+            release-assets/latest.yml \
+            release-assets/latest-arm64.yml
+          rm -f release-assets/latest-arm64.yml
 
       - name: Publish release
         uses: softprops/action-gh-release@v2

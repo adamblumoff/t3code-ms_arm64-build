@@ -1,4 +1,4 @@
-import type { DesktopRuntimeArch, DesktopRuntimeInfo } from "@t3tools/contracts";
+import type { DesktopRuntimeArch, DesktopRuntimeInfo, DesktopRuntimePlatform } from "@t3tools/contracts";
 
 interface ResolveDesktopRuntimeInfoInput {
   readonly platform: NodeJS.Platform;
@@ -12,13 +12,22 @@ function normalizeDesktopArch(arch: string): DesktopRuntimeArch {
   return "other";
 }
 
+function normalizeDesktopPlatform(platform: NodeJS.Platform): DesktopRuntimePlatform {
+  if (platform === "darwin" || platform === "linux" || platform === "win32") {
+    return platform;
+  }
+  return "other";
+}
+
 export function resolveDesktopRuntimeInfo(
   input: ResolveDesktopRuntimeInfoInput,
 ): DesktopRuntimeInfo {
+  const platform = normalizeDesktopPlatform(input.platform);
   const appArch = normalizeDesktopArch(input.processArch);
 
-  if (input.platform !== "darwin") {
+  if (platform !== "darwin" && platform !== "win32") {
     return {
+      platform,
       hostArch: appArch,
       appArch,
       runningUnderArm64Translation: false,
@@ -29,12 +38,13 @@ export function resolveDesktopRuntimeInfo(
     appArch === "arm64" || input.runningUnderArm64Translation ? "arm64" : appArch;
 
   return {
+    platform,
     hostArch,
     appArch,
     runningUnderArm64Translation: input.runningUnderArm64Translation,
   };
 }
 
-export function isArm64HostRunningIntelBuild(runtimeInfo: DesktopRuntimeInfo): boolean {
+export function isArm64HostRunningTranslatedX64Build(runtimeInfo: DesktopRuntimeInfo): boolean {
   return runtimeInfo.hostArch === "arm64" && runtimeInfo.appArch === "x64";
 }

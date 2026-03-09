@@ -72,10 +72,53 @@
   const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
 
   type Platform = { os: "mac" | "win" | "linux"; label: string; arch?: string };
+  type NavigatorWithUserAgentData = Navigator & {
+    userAgentData?: {
+      getHighEntropyValues?: (
+        hints: Array<"architecture" | "bitness" | "platform">,
+      ) => Promise<{
+        architecture?: string;
+        bitness?: string;
+        platform?: string;
+      }>;
+    };
+  };
 
-  function detectPlatform(): Platform | null {
+  async function detectWindowsArch(): Promise<string | undefined> {
+    const userAgentData = (navigator as NavigatorWithUserAgentData).userAgentData;
+    if (!userAgentData?.getHighEntropyValues) {
+      return undefined;
+    }
+
+    try {
+      const entropy = await userAgentData.getHighEntropyValues([
+        "architecture",
+        "bitness",
+        "platform",
+      ]);
+      const architecture = entropy.architecture?.toLowerCase() ?? "";
+      if (architecture.includes("arm")) {
+        return "arm64";
+      }
+      if (architecture.includes("x86") || architecture.includes("x64")) {
+        return "x64";
+      }
+    } catch {
+      return undefined;
+    }
+
+    return undefined;
+  }
+
+  async function detectPlatform(): Promise<Platform | null> {
     const ua = navigator.userAgent;
-    if (/Win/i.test(ua)) return { os: "win", label: "Download for Windows" };
+    if (/Win/i.test(ua)) {
+      return {
+        os: "win",
+        label: "Download for Windows",
+        arch: await detectWindowsArch(),
+      };
+    }
     if (/Mac/i.test(ua)) {
       return {
         os: "mac",
@@ -92,9 +135,16 @@
     platform: Platform,
   ): string | null {
     if (platform.os === "win") {
+      const preferred = platform.arch
+        ? assets.find((a) => a.name.endsWith(`-${platform.arch}.exe`))
+        : null;
       return (
+        preferred?.browser_download_url ??
         assets.find((a) => a.name.endsWith("-x64.exe"))
-          ?.browser_download_url ?? null
+          ?.browser_download_url ??
+        assets.find((a) => a.name.endsWith(".exe"))
+          ?.browser_download_url ??
+        null
       );
     }
     if (platform.os === "mac") {
@@ -118,7 +168,7 @@
     const label = document.getElementById("download-label");
     if (!btn || !label) return;
 
-    const platform = detectPlatform();
+    const platform = await detectPlatform();
     if (!platform) return;
 
     document.documentElement.dataset.platform = platform.os;

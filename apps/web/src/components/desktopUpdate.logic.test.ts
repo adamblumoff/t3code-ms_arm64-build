@@ -17,6 +17,7 @@ const baseState: DesktopUpdateState = {
   enabled: true,
   status: "idle",
   currentVersion: "1.0.0",
+  platform: "darwin",
   hostArch: "x64",
   appArch: "x64",
   runningUnderArm64Translation: false,
@@ -201,5 +202,21 @@ describe("desktop update UI helpers", () => {
     };
 
     expect(getArm64IntelBuildWarningDescription(state)).toContain("Download the available update");
+  });
+
+  it("uses Windows-specific translation copy on Windows ARM64", () => {
+    const state: DesktopUpdateState = {
+      ...baseState,
+      platform: "win32",
+      hostArch: "arm64",
+      appArch: "x64",
+      runningUnderArm64Translation: true,
+      status: "available",
+      availableVersion: "1.1.0",
+    };
+
+    expect(getArm64IntelBuildWarningDescription(state)).toContain("Windows ARM64");
+    expect(getArm64IntelBuildWarningDescription(state)).toContain("x64 build under emulation");
+    expect(getArm64IntelBuildWarningDescription(state)).toContain("native ARM64 build");
   });
 });

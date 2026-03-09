@@ -10,6 +10,7 @@ export function createInitialDesktopUpdateState(
     enabled: false,
     status: "disabled",
     currentVersion,
+    platform: runtimeInfo.platform,
     hostArch: runtimeInfo.hostArch,
     appArch: runtimeInfo.appArch,
     runningUnderArm64Translation: runtimeInfo.runningUnderArm64Translation,

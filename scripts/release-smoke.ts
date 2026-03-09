@@ -69,6 +69,42 @@ releaseDate: '2026-03-08T10:36:07.540Z'
   return { arm64Path, x64Path };
 }
 
+function writeWindowsManifestFixtures(targetRoot: string): { x64Path: string; arm64Path: string } {
+  const assetDirectory = resolve(targetRoot, "release-assets");
+  mkdirSync(assetDirectory, { recursive: true });
+
+  const x64Path = resolve(assetDirectory, "latest.yml");
+  const arm64Path = resolve(assetDirectory, "latest-arm64.yml");
+
+  writeFileSync(
+    x64Path,
+    `version: 9.9.9-smoke.0
+files:
+  - url: T3-Code-9.9.9-smoke.0-x64.exe
+    sha512: x64exe
+    size: 104857600
+path: T3-Code-9.9.9-smoke.0-x64.exe
+sha512: x64exe
+releaseDate: '2026-03-08T11:12:14.587Z'
+`,
+  );
+
+  writeFileSync(
+    arm64Path,
+    `version: 9.9.9-smoke.0
+files:
+  - url: T3-Code-9.9.9-smoke.0-arm64.exe
+    sha512: arm64exe
+    size: 101711872
+path: T3-Code-9.9.9-smoke.0-arm64.exe
+sha512: arm64exe
+releaseDate: '2026-03-08T11:18:07.540Z'
+`,
+  );
+
+  return { x64Path, arm64Path };
+}
+
 function assertContains(haystack: string, needle: string, message: string): void {
   if (!haystack.includes(needle)) {
     throw new Error(message);
@@ -106,6 +142,28 @@ try {
   const mergedManifest = readFileSync(arm64Path, "utf8");
   assertContains(mergedManifest, "T3-Code-9.9.9-smoke.0-arm64.zip", "Merged manifest is missing the arm64 asset.");
   assertContains(mergedManifest, "T3-Code-9.9.9-smoke.0-x64.zip", "Merged manifest is missing the x64 asset.");
+
+  const { x64Path: windowsX64Path, arm64Path: windowsArm64Path } = writeWindowsManifestFixtures(tempRoot);
+  execFileSync(
+    process.execPath,
+    [resolve(repoRoot, "scripts/merge-win-update-manifests.ts"), windowsX64Path, windowsArm64Path],
+    {
+      cwd: repoRoot,
+      stdio: "inherit",
+    },
+  );
+
+  const mergedWindowsManifest = readFileSync(windowsX64Path, "utf8");
+  assertContains(
+    mergedWindowsManifest,
+    "T3-Code-9.9.9-smoke.0-x64.exe",
+    "Merged Windows manifest is missing the x64 asset.",
+  );
+  assertContains(
+    mergedWindowsManifest,
+    "T3-Code-9.9.9-smoke.0-arm64.exe",
+    "Merged Windows manifest is missing the arm64 asset.",
+  );
 
   console.log("Release smoke checks passed.");
 } finally {

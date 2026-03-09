@@ -577,10 +577,9 @@ describe("TerminalManager", () => {
         ),
       ).toBe(true);
     } else {
+      const fallbackShellNames = new Set(["zsh", "bash", "sh"]);
       expect(
-        ptyAdapter.spawnInputs.some((input) =>
-          ["/bin/zsh", "/bin/bash", "/bin/sh", "zsh", "bash", "sh"].includes(input.shell),
-        ),
+        ptyAdapter.spawnInputs.some((input) => fallbackShellNames.has(path.basename(input.shell))),
       ).toBe(true);
     }
 

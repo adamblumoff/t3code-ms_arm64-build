@@ -45,14 +45,20 @@ export function getArm64IntelBuildWarningDescription(state: DesktopUpdateState):
     return "This install is using the correct architecture.";
   }
 
+  const deviceLabel =
+    state.platform === "win32" ? "This Windows ARM64 device" : "This Mac has Apple Silicon";
+  const translatedBuildLabel =
+    state.platform === "win32" ? "the x64 build under emulation" : "the Intel build under Rosetta";
+  const nativeBuildLabel =
+    state.platform === "win32" ? "the native ARM64 build" : "the native Apple Silicon build";
   const action = resolveDesktopUpdateButtonAction(state);
   if (action === "download") {
-    return "This Mac has Apple Silicon, but T3 Code is still running the Intel build under Rosetta. Download the available update to switch to the native Apple Silicon build.";
+    return `${deviceLabel}, but T3 Code is still running ${translatedBuildLabel}. Download the available update to switch to ${nativeBuildLabel}.`;
   }
   if (action === "install") {
-    return "This Mac has Apple Silicon, but T3 Code is still running the Intel build under Rosetta. Restart to install the downloaded Apple Silicon build.";
+    return `${deviceLabel}, but T3 Code is still running ${translatedBuildLabel}. Restart to install the downloaded ${nativeBuildLabel}.`;
   }
-  return "This Mac has Apple Silicon, but T3 Code is still running the Intel build under Rosetta. The next app update will replace it with the native Apple Silicon build.";
+  return `${deviceLabel}, but T3 Code is still running ${translatedBuildLabel}. The next app update will replace it with ${nativeBuildLabel}.`;
 }
 
 export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string {

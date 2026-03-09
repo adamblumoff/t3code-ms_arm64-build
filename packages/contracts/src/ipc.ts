@@ -59,8 +59,10 @@ export type DesktopUpdateStatus =
   | "error";
 
 export type DesktopRuntimeArch = "arm64" | "x64" | "other";
+export type DesktopRuntimePlatform = "darwin" | "linux" | "win32" | "other";
 
 export interface DesktopRuntimeInfo {
+  platform: DesktopRuntimePlatform;
   hostArch: DesktopRuntimeArch;
   appArch: DesktopRuntimeArch;
   runningUnderArm64Translation: boolean;
@@ -70,6 +72,7 @@ export interface DesktopUpdateState {
   enabled: boolean;
   status: DesktopUpdateStatus;
   currentVersion: string;
+  platform: DesktopRuntimePlatform;
   hostArch: DesktopRuntimeArch;
   appArch: DesktopRuntimeArch;
   runningUnderArm64Translation: boolean;

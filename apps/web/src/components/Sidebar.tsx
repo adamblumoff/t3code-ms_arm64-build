@@ -1045,7 +1045,7 @@ export default function Sidebar() {
           <SidebarGroup className="px-2 pt-2 pb-0">
             <Alert variant="warning" className="rounded-2xl border-warning/40 bg-warning/8">
               <TriangleAlertIcon />
-              <AlertTitle>Intel build on Apple Silicon</AlertTitle>
+              <AlertTitle>x64 build on ARM64 device</AlertTitle>
               <AlertDescription>{arm64IntelBuildWarningDescription}</AlertDescription>
               {desktopUpdateButtonAction !== "none" ? (
                 <AlertAction>
@@ -1056,8 +1056,8 @@ export default function Sidebar() {
                     onClick={handleDesktopUpdateButtonClick}
                   >
                     {desktopUpdateButtonAction === "download"
-                      ? "Download ARM build"
-                      : "Install ARM build"}
+                      ? "Download ARM64 build"
+                      : "Install ARM64 build"}
                   </Button>
                 </AlertAction>
               ) : null}

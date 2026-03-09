@@ -14,6 +14,7 @@ import {
 } from "./updateMachine";
 
 const runtimeInfo = {
+  platform: "linux",
   hostArch: "x64",
   appArch: "x64",
   runningUnderArm64Translation: false,

@@ -31,7 +31,11 @@ import {
   reduceDesktopUpdateStateOnNoUpdate,
   reduceDesktopUpdateStateOnUpdateAvailable,
 } from "./updateMachine";
-import { isArm64HostRunningIntelBuild, resolveDesktopRuntimeInfo } from "./runtimeArch";
+import { isArm64HostRunningTranslatedX64Build, resolveDesktopRuntimeInfo } from "./runtimeArch";
+import {
+  preferWindowsArm64UpdateForTranslatedBuild,
+  type MutableUpdateInfoAndProvider,
+} from "./windowsArm64Update";
 
 fixPath();
 
@@ -88,6 +92,12 @@ const desktopRuntimeInfo = resolveDesktopRuntimeInfo({
 });
 const initialUpdateState = (): DesktopUpdateState =>
   createInitialDesktopUpdateState(app.getVersion(), desktopRuntimeInfo);
+
+function getMutableUpdaterSelectionState(): MutableUpdateInfoAndProvider | null | undefined {
+  return (
+    autoUpdater as unknown as { updateInfoAndProvider?: MutableUpdateInfoAndProvider | null }
+  ).updateInfoAndProvider;
+}
 
 function logTimestamp(): string {
   return new Date().toISOString();
@@ -700,6 +710,11 @@ async function checkForUpdates(reason: string): Promise<void> {
 
   try {
     await autoUpdater.checkForUpdates();
+    if (preferWindowsArm64UpdateForTranslatedBuild(desktopRuntimeInfo, getMutableUpdaterSelectionState())) {
+      console.info(
+        "[desktop-updater] Adjusted translated Windows ARM64 update selection to prefer arm64 artifacts.",
+      );
+    }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     setUpdateState(reduceDesktopUpdateStateOnCheckFailure(updateState, message, new Date().toISOString()));
@@ -715,7 +730,8 @@ async function downloadAvailableUpdate(): Promise<{ accepted: boolean; completed
   }
   updateDownloadInFlight = true;
   setUpdateState(reduceDesktopUpdateStateOnDownloadStart(updateState));
-  autoUpdater.disableDifferentialDownload = isArm64HostRunningIntelBuild(desktopRuntimeInfo);
+  autoUpdater.disableDifferentialDownload = isArm64HostRunningTranslatedX64Build(desktopRuntimeInfo);
+  preferWindowsArm64UpdateForTranslatedBuild(desktopRuntimeInfo, getMutableUpdaterSelectionState());
   console.info("[desktop-updater] Downloading update...");
 
   try {
@@ -788,12 +804,12 @@ function configureAutoUpdater(): void {
   autoUpdater.channel = DESKTOP_UPDATE_CHANNEL;
   autoUpdater.allowPrerelease = DESKTOP_UPDATE_ALLOW_PRERELEASE;
   autoUpdater.allowDowngrade = false;
-  autoUpdater.disableDifferentialDownload = isArm64HostRunningIntelBuild(desktopRuntimeInfo);
+  autoUpdater.disableDifferentialDownload = isArm64HostRunningTranslatedX64Build(desktopRuntimeInfo);
   let lastLoggedDownloadMilestone = -1;
 
-  if (isArm64HostRunningIntelBuild(desktopRuntimeInfo)) {
+  if (isArm64HostRunningTranslatedX64Build(desktopRuntimeInfo)) {
     console.info(
-      "[desktop-updater] Apple Silicon host detected while running Intel build; updates will switch to arm64 packages.",
+      "[desktop-updater] ARM64 host detected while running translated x64 build; updates will switch to arm64 packages.",
     );
   }
 

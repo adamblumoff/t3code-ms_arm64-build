@@ -415,6 +415,16 @@ function resolveDesktopRuntimeDependencies(
   return resolveCatalogDependencies(runtimeDependencies, catalog, "apps/desktop");
 }
 
+function resolveServerRuntimeDependencies(
+  dependencies: Record<string, unknown> | undefined,
+  catalog: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!dependencies || Object.keys(dependencies).length === 0) {
+    return {};
+  }
+  return resolveCatalogDependencies(dependencies, catalog, "apps/server");
+}
+
 function resolveGitHubPublishConfig():
   | {
       readonly provider: "github";
@@ -534,10 +544,9 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 
   const resolvedServerDependencies = yield* Effect.try({
     try: () =>
-      resolveCatalogDependencies(
+      resolveServerRuntimeDependencies(
         serverDependencies,
         rootPackageJson.workspaces.catalog,
-        "apps/server",
       ),
     catch: (cause) =>
       new BuildScriptError({

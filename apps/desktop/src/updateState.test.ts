@@ -12,6 +12,7 @@ const baseState: DesktopUpdateState = {
   enabled: true,
   status: "idle",
   currentVersion: "1.0.0",
+  platform: "linux",
   hostArch: "x64",
   appArch: "x64",
   runningUnderArm64Translation: false,
